@@ -475,13 +475,16 @@ public class InventoryUtils
         PlayerEntity player = mc.player;
 
         if (player != null && mc.world != null &&
-            TOOL_SWITCH_IGNORED_SLOTS.contains(player.getInventory().selectedSlot) == false)
+                !TOOL_SWITCH_IGNORED_SLOTS.contains(player.getInventory().selectedSlot))
         {
             BlockState state = mc.world.getBlockState(pos);
             ScreenHandler container = player.playerScreenHandler;
             ItemPickerTest test;
-
-            if (FeatureToggle.TWEAK_SWAP_ALMOST_BROKEN_TOOLS.getBooleanValue())
+            if (FeatureToggle.TWEAK_MIN_EFFECTIVE_TOOL.getBooleanValue())
+            {
+                test = (currentStack, previous) -> InventoryUtils.minEffectiveTool(currentStack, previous, state);
+            }
+            else if (FeatureToggle.TWEAK_SWAP_ALMOST_BROKEN_TOOLS.getBooleanValue())
             {
                 test = (currentStack, previous) -> InventoryUtils.isBetterToolAndHasDurability(currentStack, previous, state);
             }
@@ -501,7 +504,7 @@ public class InventoryUtils
 
     private static boolean isBetterTool(ItemStack testedStack, ItemStack previousTool, BlockState state)
     {
-        return testedStack.isEmpty() == false && isMoreEffectiveTool(testedStack, previousTool, state);
+        return !testedStack.isEmpty() && isMoreEffectiveTool(testedStack, previousTool, state);
     }
 
     private static boolean isBetterToolAndHasDurability(ItemStack testedStack, ItemStack previousTool, BlockState state)
@@ -514,6 +517,25 @@ public class InventoryUtils
         return getBaseBlockBreakingSpeed(testedStack, state) > getBaseBlockBreakingSpeed(previousTool, state);
     }
 
+    /**
+     * returns the minimum tool needed to mine. By default, has low dur tool switch
+     * @param testedStack
+     * @param previousTool
+     * @param state
+     * @return
+     */
+    private static boolean minEffectiveTool(ItemStack testedStack, ItemStack previousTool, BlockState state){
+        return !testedStack.isEmpty() && hasEnoughDurability(testedStack) &&
+                (getBaseBlockBreakingSpeed(testedStack, state) < getBaseBlockBreakingSpeed(previousTool, state)) &&
+                state.isToolRequired() && testedStack.isSuitableFor(state);
+    }
+
+    /**
+     * how fast it is to break block using item. higher score = faster
+     * @param stack item in question
+     * @param state block data
+     * @return
+     */
     protected static float getBaseBlockBreakingSpeed(ItemStack stack, BlockState state)
     {
         float speed = stack.getMiningSpeedMultiplier(state);
@@ -528,7 +550,7 @@ public class InventoryUtils
             }
         }
 
-        if (state.isToolRequired() && stack.isSuitableFor(state) == false)
+        if (state.isToolRequired() && !stack.isSuitableFor(state))
         {
             speed /= (100F / 30F);
         }
